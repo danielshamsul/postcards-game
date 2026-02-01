@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Postcards from Places You’ve Never Been</title>
+  <style>
+    :root{
+      --bg1:#f7d6e6; /* pastel pink */
+      --bg2:#cfe7ff; /* pastel blue */
+      --bg3:#dff6e6; /* pastel mint */
+      --ink:#2b2b2b;
+      --paper:#fff7ee;
+      --paper2:#f7efe4;
+      --accent:#8aa6ff;
+      --shadow: rgba(0,0,0,.12);
+    }
+    html,body{
+      margin:0; height:100%;
+      background: linear-gradient(180deg, var(--bg2), var(--bg1));
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--ink);
+      overflow:hidden;
+    }
+    .wrap{
+      height:100%;
+      display:grid;
+      place-items:center;
+      padding:16px;
+      box-sizing:border-box;
+    }
+    canvas{
+      width:min(980px, 96vw);
+      height:min(560px, 70vh);
+      border-radius:18px;
+      box-shadow: 0 18px 60px var(--shadow);
+      background: transparent;
+      image-rendering: auto;
+    }
+    .hud{
+      position:fixed;
+      left:18px; top:14px;
+      display:flex; gap:10px; align-items:center;
+      font-size:14px;
+      padding:10px 12px;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.55);
+      backdrop-filter: blur(8px);
+      border-radius:14px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.08);
+      user-select:none;
+    }
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background: rgba(255,255,255,.75);
+      padding:2px 6px;
+      border-radius:8px;
+      border:1px solid rgba(0,0,0,.08);
+    }
+    .pill{
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.75);
+      border:1px solid rgba(0,0,0,.08);
+    }
+    .btn{
+      cursor:pointer;
+      padding:8px 12px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.86);
+      box-shadow: 0 10px 22px rgba(0,0,0,.08);
+      transition: transform .05s ease;
+      user-select:none;
+    }
+    .btn:active{ transform: translateY(1px); }
+
+    .modal{
+      position:fixed; inset:0;
+      display:none;
+      place-items:center;
+      background: rgba(0,0,0,.28);
+      backdrop-filter: blur(8px);
+      padding:22px;
+      box-sizing:border-box;
+    }
+    .modal.show{ display:grid; }
+    .card{
+      width:min(720px, 92vw);
+      border-radius:18px;
+      background: radial-gradient(120% 120% at 30% 10%, var(--paper), var(--paper2));
+      box-shadow: 0 20px 70px rgba(0,0,0,.22);
+      border: 1px solid rgba(0,0,0,.08);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding:14px 16px;
+      background: rgba(255,255,255,.55);
+      border-bottom: 1px solid rgba(0,0,0,.06);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .title{
+      font-weight:650;
+      letter-spacing:.2px;
+    }
+    .closeHint{
+      opacity:.75;
+      font-size:13px;
+    }
+    .cardBody{
+      padding:18px 16px 20px;
+      line-height:1.55;
+      font-size:18px;
+      white-space:pre-wrap;
+    }
+    .sig{
+      margin-top:14px;
+      opacity:.85;
+      font-style:italic;
+    }
+    .footer{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      padding:12px 16px;
+      border-top: 1px solid rgba(0,0,0,.06);
+      background: rgba(255,255,255,.50);
+      font-size:14px;
+    }
+    .progress{
+      opacity:.75;
+    }
+
+    .startOverlay{
+      position:fixed; inset:0;
+      display:grid;
+      place-items:center;
+      padding:22px;
+      background: radial-gradient(120% 120% at 30% 10%, rgba(255,255,255,.40), rgba(255,255,255,.05));
+      backdrop-filter: blur(8px);
+    }
+    .startCard{
+      width:min(760px, 94vw);
+      border-radius:18px;
+      background: rgba(255,255,255,.70);
+      border:1px solid rgba(255,255,255,.55);
+      box-shadow: 0 22px 70px rgba(0,0,0,.18);
+      padding:18px 18px 16px;
+    }
+    .startCard h1{
+      margin: 0 0 6px;
+      font-size:24px;
+      letter-spacing:.2px;
+    }
+    .startCard p{
+      margin: 8px 0;
+      opacity:.88;
+      line-height:1.45;
+    }
+    .startRow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      margin-top:12px;
+    }
+    .small{
+      font-size:13px;
+      opacity:.75;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="c" width="980" height="560"></canvas>
+  </div>
+
+  <div class="hud">
+    <span class="pill"><span class="kbd">A</span>/<span class="kbd">D</span> or <span class="kbd">←</span>/<span class="kbd">→</span> move</span>
+    <span class="pill"><span class="kbd">Space</span> jump</span>
+    <span class="pill"><span class="kbd">E</span> interact</span>
+    <span id="collect" class="pill">Postcards: 0/4</span>
+    <button id="muteBtn" class="btn" title="Toggle sound">Sound: On</button>
+  </div>
+
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="card" role="dialog" aria-modal="true">
+      <div class="cardHeader">
+        <div class="title" id="cardTitle">Postcard</div>
+        <div class="closeHint">Press <span class="kbd">Esc</span> or <span class="kbd">E</span> to close</div>
+      </div>
+      <div class="cardBody" id="cardText"></div>
+      <div class="footer">
+        <div class="progress" id="progressText"></div>
+        <button id="closeBtn" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="startOverlay" class="startOverlay">
+    <div class="startCard">
+      <h1>Postcards from Places You’ve Never Been</h1>
+      <p>Explore a small dream-coast. Find objects that hold postcards. Read gently. No rush.</p>
+      <p class="small">Note: browsers require a click to begin audio.</p>
+      <div class="startRow">
+        <button id="startBtn" class="btn">Start (with ambient sound)</button>
+        <button id="startSilentBtn" class="btn">Start (silent)</button>
+      </div>
+      <p class="small">Tip: when near an object, an “E” prompt will appear.</p>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ===== Canvas Setup =====
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // ===== Input =====
+  const keys = new Set();
+  window.addEventListener('keydown', (e) => {
+    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","KeyA","KeyD","KeyE","Escape"].includes(e.code)) e.preventDefault();
+    keys.add(e.code);
+    if (e.code === 'Escape') closeModal();
+    if (e.code === 'KeyE' && modalOpen) closeModal();
+  }, {passive:false});
+  window.addEventListener('keyup', (e) => keys.delete(e.code));
+
+  // ===== World =====
+  const W = canvas.width, H = canvas.height;
+
+  // Simple camera
+  let camX = 0;
+
+  // Level geometry (platforms)
+  const platforms = [
+    {x:0,   y:470, w:1600, h:90},  // ground
+    {x:210, y:380, w:220,  h:18},
+    {x:520, y:320, w:220,  h:18},
+    {x:820, y:360, w:180,  h:18},
+    {x:1120,y:300, w:260,  h:18},
+  ];
+
+  // Interactive objects (postcards)
+  const objects = [
+    {
+      id:"mailbox",
+      name:"A Sun-Faded Mailbox",
+      x:300, y:338, w:34, h:42,
+      found:false,
+      msg:"Dear you,\n\nThe houses here lean toward the sea as if listening.\nEven the paint remembers the warmth.\n\n— from a shore that only exists when you blink"
+    },
+    {
+      id:"bench",
+      name:"A Quiet Bench",
+      x:610, y:278, w:58, h:28,
+      found:false,
+      msg:"Dear friend,\n\nI sat down and the wind sat with me.\nWe watched clouds practice being slow.\n\n— from an afternoon that never checks the time"
+    },
+    {
+      id:"lighthouse",
+      name:"A Small Lighthouse",
+      x:900, y:290, w:44, h:90,
+      found:false,
+      msg:"Dear someone,\n\nThe light doesn’t point the way.\nIt simply says: you are not alone out here.\n\n— from the edge of a gentle ocean"
+    },
+    {
+      id:"window",
+      name:"A Glowing Window",
+      x:1250, y:212, w:52, h:56,
+      found:false,
+      msg:"Dear you,\n\nThere’s a room inside the sky.\nIt smells like tea and old paper.\n\n— from a place you almost remembered"
+    },
+  ];
+
+  const totalPostcards = objects.length;
+
+  // Player
+  const player = {
+    x: 80, y: 200,
+    w: 28, h: 40,
+    vx: 0, vy: 0,
+    onGround: false
+  };
+
+  // Particles (soft drifting “dust”)
+  const dust = Array.from({length: 90}, () => ({
+    x: Math.random()*1600,
+    y: Math.random()*H,
+    r: 1 + Math.random()*2.2,
+    s: 0.2 + Math.random()*0.6,
+    a: 0.08 + Math.random()*0.18
+  }));
+
+  // Water shimmer band near bottom
+  function drawWater(time){
+    const baseY = 470;
+    const bandH = 70;
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    for(let i=0;i<10;i++){
+      const y = baseY + (i/10)*bandH;
+      ctx.beginPath();
+      for(let x=0;x<=W;x+=18){
+        const wx = x + camX*0.2;
+        const wave = Math.sin((wx*0.012) + time*0.001 + i*0.6) * (1.2 + i*0.12);
+        ctx.lineTo(x, y + wave);
+      }
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ===== Simple Physics / Collision =====
+  function rectsOverlap(a,b){
+    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  }
+
+  function moveAndCollide(dt){
+    // Horizontal
+    player.x += player.vx * dt;
+
+    // Collide horizontally
+    for (const p of platforms) {
+      const pr = {x:p.x, y:p.y, w:p.w, h:p.h};
+      const pl = {x:player.x, y:player.y, w:player.w, h:player.h};
+      if (rectsOverlap(pl, pr)) {
+        if (player.vx > 0) player.x = p.x - player.w;
+        if (player.vx < 0) player.x = p.x + p.w;
+        player.vx = 0;
+      }
+    }
+
+    // Vertical
+    player.vy += 1800 * dt; // gravity
+    player.y += player.vy * dt;
+    player.onGround = false;
+
+    // Collide vertically
+    for (const p of platforms) {
+      const pr = {x:p.x, y:p.y, w:p.w, h:p.h};
+      const pl = {x:player.x, y:player.y, w:player.w, h:player.h};
+      if (rectsOverlap(pl, pr)) {
+        if (player.vy > 0) { // falling
+          player.y = p.y - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        } else if (player.vy < 0) { // rising
+          player.y = p.y + p.h;
+          player.vy = 0;
+        }
+      }
+    }
+  }
+
+  // ===== UI / Modal =====
+  const modal = document.getElementById('modal');
+  const cardTitle = document.getElementById('cardTitle');
+  const cardText = document.getElementById('cardText');
+  const progressText = document.getElementById('progressText');
+  const closeBtn = document.getElementById('closeBtn');
+  const collect = document.getElementById('collect');
+  let modalOpen = false;
+
+  closeBtn.addEventListener('click', closeModal);
+
+  function openModal(obj){
+    modalOpen = true;
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden','false');
+
+    cardTitle.textContent = obj.name;
+    cardText.textContent = obj.msg;
+
+    const foundCount = objects.filter(o => o.found).length;
+    progressText.textContent = `Postcard ${foundCount}/${totalPostcards}`;
+  }
+
+  function closeModal(){
+    if (!modalOpen) return;
+    modalOpen = false;
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden','true');
+  }
+
+  function updateCollect(){
+    const foundCount = objects.filter(o => o.found).length;
+    collect.textContent = `Postcards: ${foundCount}/${totalPostcards}`;
+  }
+
+  // ===== Ambient Audio (non-spooky) =====
+  let audioCtx = null;
+  let master = null;
+  let ocean = null;
+  let pad = null;
+  let wind = null;
+  let muted = false;
+
+  const muteBtn = document.getElementById('muteBtn');
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    if (master) master.gain.value = muted ? 0 : 0.75;
+    muteBtn.textContent = muted ? "Sound: Off" : "Sound: On";
+  });
+
+  function makeNoiseBuffer(ctx, seconds=2){
+    const sampleRate = ctx.sampleRate;
+    const buffer = ctx.createBuffer(1, sampleRate*seconds, sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<data.length;i++){
+      data[i] = (Math.random()*2-1);
+    }
+    return buffer;
+  }
+
+  function startAmbient(){
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    master = audioCtx.createGain();
+    master.gain.value = 0.75; // overall volume
+    master.connect(audioCtx.destination);
+
+    // Ocean noise: filtered noise + slow amplitude wobble
+    const noiseBuf = makeNoiseBuffer(audioCtx, 2.5);
+    ocean = audioCtx.createBufferSource();
+    ocean.buffer = noiseBuf;
+    ocean.loop = true;
+
+    const oceanFilter = audioCtx.createBiquadFilter();
+    oceanFilter.type = "lowpass";
+    oceanFilter.frequency.value = 420;
+
+    const oceanGain = audioCtx.createGain();
+    oceanGain.gain.value = 0.12;
+
+    // LFO for gentle waves
+    const oceanLFO = audioCtx.createOscillator();
+    oceanLFO.type = "sine";
+    oceanLFO.frequency.value = 0.12; // very slow
+    const oceanLFODepth = audioCtx.createGain();
+    oceanLFODepth.gain.value = 0.06;
+    oceanLFO.connect(oceanLFODepth);
+    oceanLFODepth.connect(oceanGain.gain);
+
+    ocean.connect(oceanFilter);
+    oceanFilter.connect(oceanGain);
+    oceanGain.connect(master);
+
+    // Wind: bandpass-ish airy noise
+    wind = audioCtx.createBufferSource();
+    wind.buffer = makeNoiseBuffer(audioCtx, 2.0);
+    wind.loop = true;
+
+    const windFilter = audioCtx.createBiquadFilter();
+    windFilter.type = "bandpass";
+    windFilter.frequency.value = 900;
+    windFilter.Q.value = 0.6;
+
+    const windGain = audioCtx.createGain();
+    windGain.gain.value = 0.05;
+
+    const windLFO = audioCtx.createOscillator();
+    windLFO.type = "sine";
+    windLFO.frequency.value = 0.07;
+    const windDepth = audioCtx.createGain();
+    windDepth.gain.value = 0.03;
+    windLFO.connect(windDepth);
+    windDepth.connect(windGain.gain);
+
+    wind.connect(windFilter);
+    windFilter.connect(windGain);
+    windGain.connect(master);
+
+    // Soft pad: two oscillators + slow filter + slight detune
+    pad = {};
+    pad.osc1 = audioCtx.createOscillator();
+    pad.osc2 = audioCtx.createOscillator();
+    pad.osc1.type = "sine";
+    pad.osc2.type = "triangle";
+    pad.osc1.frequency.value = 220;       // A3
+    pad.osc2.frequency.value = 220*1.005; // slightly detuned
+
+    const padFilter = audioCtx.createBiquadFilter();
+    padFilter.type = "lowpass";
+    padFilter.frequency.value = 650;
+
+    const padGain = audioCtx.createGain();
+    padGain.gain.value = 0.06;
+
+    // LFO to gently open/close filter
+    const padLFO = audioCtx.createOscillator();
+    padLFO.type = "sine";
+    padLFO.frequency.value = 0.05;
+    const padDepth = audioCtx.createGain();
+    padDepth.gain.value = 140;
+    padLFO.connect(padDepth);
+    padDepth.connect(padFilter.frequency);
+
+    // Reverb-ish: simple delay feedback (very subtle)
+    const delay = audioCtx.createDelay();
+    delay.delayTime.value = 0.28;
+    const fb = audioCtx.createGain();
+    fb.gain.value = 0.18;
+    delay.connect(fb);
+    fb.connect(delay);
+
+    pad.osc1.connect(padFilter);
+    pad.osc2.connect(padFilter);
+    padFilter.connect(padGain);
+    padGain.connect(delay);
+    delay.connect(master);
+    padGain.connect(master);
+
+    // Start everything
+    const t = audioCtx.currentTime + 0.02;
+    ocean.start(t);
+    oceanLFO.start(t);
+    wind.start(t);
+    windLFO.start(t);
+    pad.osc1.start(t);
+    pad.osc2.start(t);
+    padLFO.start(t);
+  }
+
+  // ===== Start overlay =====
+  const startOverlay = document.getElementById('startOverlay');
+  document.getElementById('startBtn').addEventListener('click', () => {
+    startAmbient();
+    startOverlay.style.display = 'none';
+  });
+  document.getElementById('startSilentBtn').addEventListener('click', () => {
+    startOverlay.style.display = 'none';
+  });
+
+  // ===== Drawing helpers =====
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function drawBackground(time){
+    // Sky gradient
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, "#cfe7ff");
+    g.addColorStop(0.55, "#f7d6e6");
+    g.addColorStop(1, "#dff6e6");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    // Soft sun glow
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    const sx = 160 - camX*0.06;
+    const sy = 120;
+    const rg = ctx.createRadialGradient(sx, sy, 10, sx, sy, 220);
+    rg.addColorStop(0, "rgba(255,255,255,0.9)");
+    rg.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 220, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Cloudy watercolor blobs
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    for(let i=0;i<7;i++){
+      const cx = (i*220 + (time*0.018) % 220) - camX*0.15;
+      const cy = 90 + (i%3)*26;
+      const r = 80 + (i%4)*18;
+      const cg = ctx.createRadialGradient(cx,cy,10,cx,cy,r);
+      cg.addColorStop(0,"rgba(255,255,255,0.8)");
+      cg.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawPlatforms(){
+    // Ground watercolor wash
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    for(const p of platforms){
+      // base
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+
+      // soft edge
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "rgba(240,220,235,0.9)";
+      ctx.fillRect(p.x, p.y, p.w, 6);
+      ctx.globalAlpha = 1;
+
+      // subtle texture strokes
+      ctx.globalAlpha = 0.18;
+      for(let i=0;i<18;i++){
+        const xx = p.x + (i/18)*p.w;
+        const yy = p.y + 12 + (i%3)*6;
+        ctx.beginPath();
+        ctx.moveTo(xx, yy);
+        ctx.lineTo(xx + 18, yy + (i%2?2:-2));
+        ctx.strokeStyle = "rgba(180,160,190,0.9)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // little hills
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(260, 470, 120, Math.PI, Math.PI*2);
+    ctx.arc(460, 470, 160, Math.PI, Math.PI*2);
+    ctx.arc(700, 470, 140, Math.PI, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawObjects(time){
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    for(const o of objects){
+      // Soft glow if not found
+      if(!o.found){
+        ctx.save();
+        ctx.globalAlpha = 0.16;
+        const gx = o.x + o.w/2;
+        const gy = o.y + o.h/2;
+        const gg = ctx.createRadialGradient(gx,gy,4,gx,gy,60);
+        gg.addColorStop(0,"rgba(255,255,255,0.9)");
+        gg.addColorStop(1,"rgba(255,255,255,0)");
+        ctx.fillStyle = gg;
+        ctx.beginPath();
+        ctx.arc(gx,gy,60,0,Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Draw simple “hand-drawn” silhouettes
+      ctx.save();
+      ctx.globalAlpha = o.found ? 0.55 : 0.88;
+      ctx.fillStyle = "rgba(80,80,100,0.65)";
+      ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      ctx.lineWidth = 2;
+
+      if (o.id === "mailbox"){
+        // post + box
+        ctx.fillRect(o.x+12,o.y+6,10,o.h-6);
+        roundRect(ctx, o.x, o.y, o.w, 24, 8, true, true);
+        ctx.beginPath(); ctx.moveTo(o.x+6,o.y+18); ctx.lineTo(o.x+o.w-6,o.y+18); ctx.stroke();
+      } else if (o.id === "bench"){
+        roundRect(ctx, o.x, o.y+8, o.w, 10, 6, true, false);
+        ctx.fillRect(o.x+6, o.y+16, 6, 12);
+        ctx.fillRect(o.x+o.w-12, o.y+16, 6, 12);
+      } else if (o.id === "lighthouse"){
+        roundRect(ctx, o.x+8, o.y+14, 28, 70, 10, true, false);
+        roundRect(ctx, o.x+4, o.y, 36, 18, 8, true, false);
+        ctx.beginPath(); ctx.arc(o.x+22, o.y+8, 5, 0, Math.PI*2); ctx.stroke();
+      } else if (o.id === "window"){
+        roundRect(ctx, o.x, o.y, o.w, o.h, 10, true, false);
+        ctx.globalAlpha = o.found ? 0.18 : 0.32;
+        ctx.fillStyle = "rgba(255,240,200,0.9)";
+        roundRect(ctx, o.x+8, o.y+10, o.w-16, o.h-18, 8, true, false);
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    function roundRect(ctx,x,y,w,h,r,fill,stroke){
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x+rr, y);
+      ctx.arcTo(x+w, y, x+w, y+h, rr);
+      ctx.arcTo(x+w, y+h, x, y+h, rr);
+      ctx.arcTo(x, y+h, x, y, rr);
+      ctx.arcTo(x, y, x+w, y, rr);
+      ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
+  }
+
+  function drawPlayer(){
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    // Shadow
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(player.x+player.w/2, 470, 18, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Body (simple watercolor blob)
+    ctx.globalAlpha = 0.92;
+    const px = player.x, py = player.y;
+    const pg = ctx.createRadialGradient(px+12, py+12, 6, px+12, py+12, 34);
+    pg.addColorStop(0, "rgba(255,255,255,0.95)");
+    pg.addColorStop(1, "rgba(190,210,255,0.85)");
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.roundRect(px, py, player.w, player.h, 12);
+    ctx.fill();
+
+    // Face hint
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = "rgba(30,30,40,0.7)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px+11, py+18, 1.2, 0, Math.PI*2);
+    ctx.arc(px+17, py+18, 1.2, 0, Math.PI*2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawDust(time){
+    ctx.save();
+    ctx.translate(-camX*0.4, 0);
+    for(const d of dust){
+      d.x += d.s*0.35;
+      if(d.x > 1600) d.x = 0;
+      const bob = Math.sin(time*0.001 + d.y*0.01) * 0.35;
+      ctx.globalAlpha = d.a;
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.beginPath();
+      ctx.arc(d.x, d.y + bob, d.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawInteractHint(nearest){
+    if (!nearest || modalOpen) return;
+
+    ctx.save();
+    const sx = nearest.x + nearest.w/2 - camX;
+    const sy = nearest.y - 18;
+
+    // floating hint
+    const t = performance.now()*0.002;
+    const y = sy + Math.sin(t)*4;
+
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.strokeStyle = "rgba(0,0,0,0.08)";
+    ctx.lineWidth = 1;
+
+    const text = "Press E";
+    ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+    const tw = ctx.measureText(text).width;
+
+    const padX = 10, padY = 7;
+    const boxW = tw + padX*2;
+    const boxH = 26;
+
+    roundedBox(ctx, sx - boxW/2, y - boxH/2, boxW, boxH, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(30,30,40,0.82)";
+    ctx.fillText(text, sx - tw/2, y + 5);
+
+    ctx.restore();
+
+    function roundedBox(ctx,x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+      ctx.closePath();
+    }
+  }
+
+  // ===== Interaction =====
+  function nearestInteractable(){
+    // Find nearest within radius and roughly same vertical band
+    const pr = {x:player.x, y:player.y, w:player.w, h:player.h};
+    let best = null;
+    let bestDist = 1e9;
+    for(const o of objects){
+      const or = {x:o.x, y:o.y, w:o.w, h:o.h};
+      // expand interaction area
+      const area = {x:o.x-38, y:o.y-30, w:o.w+76, h:o.h+60};
+      if (rectsOverlap(pr, area)) {
+        const dx = (o.x+o.w/2) - (player.x+player.w/2);
+        const dy = (o.y+o.h/2) - (player.y+player.h/2);
+        const dist = Math.hypot(dx, dy);
+        if (dist < bestDist){
+          bestDist = dist;
+          best = o;
+        }
+      }
+    }
+    return best;
+  }
+
+  function tryInteract(){
+    if (modalOpen) return;
+    const o = nearestInteractable();
+    if (!o) return;
+
+    if (!o.found){
+      o.found = true;
+      updateCollect();
+    }
+    openModal(o);
+
+    // If this was the last postcard, add ending note
+    const foundCount = objects.filter(x => x.found).length;
+    if (foundCount === totalPostcards){
+      // append ending line softly
+      cardText.textContent += "\n\nWish you were here.";
+      progressText.textContent = `Postcard ${foundCount}/${totalPostcards}`;
+    }
+  }
+
+  // ===== Game Loop =====
+  let last = performance.now();
+  function tick(now){
+    const dt = Math.min(0.032, (now-last)/1000);
+    last = now;
+
+    if (!modalOpen) {
+      // Controls
+      const left = keys.has('ArrowLeft') || keys.has('KeyA');
+      const right = keys.has('ArrowRight') || keys.has('KeyD');
+
+      const target = (right? 1:0) - (left? 1:0);
+      const speed = 360;
+
+      // gentle acceleration / damping
+      player.vx = lerp(player.vx, target*speed, 0.12);
+
+      // jump
+      if ((keys.has('Space') || keys.has('ArrowUp')) && player.onGround) {
+        player.vy = -660;
+      }
+
+      // interact
+      if (keys.has('KeyE')) {
+        keys.delete('KeyE'); // one-shot
+        tryInteract();
+      }
+
+      moveAndCollide(dt);
+
+      // Keep player in bounds
+      player.x = Math.max(0, Math.min(1570, player.x));
+      player.y = Math.min(H-60, player.y);
+
+      // Camera follows
+      const desired = player.x - W*0.45;
+      camX = lerp(camX, desired, 0.08);
+      camX = Math.max(0, Math.min(1600 - W, camX));
+    }
+
+    // Draw
+    drawBackground(now);
+    drawDust(now);
+    drawPlatforms();
+    drawWater(now);
+    drawObjects(now);
+    drawPlayer();
+
+    // Interaction hint
+    const near = nearestInteractable();
+    drawInteractHint(near);
+
+    requestAnimationFrame(tick);
+  }
+
+  updateCollect();
+  requestAnimationFrame(tick);
+
+})();
+</script>
+</body>
+</html>
